@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Student Management System</title>
+<style>
+  :root { --navy:#14213d; --blue:#2563eb; --bg:#f3f5f9; --line:#dde2ec; --red:#dc2626; --green:#16a34a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Segoe UI, Arial, sans-serif; background:var(--bg); color:#1f2937; }
+  header { background:var(--navy); color:#fff; padding:16px 24px; }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; font-size:13px; opacity:.75; }
+  nav { background:#fff; border-bottom:1px solid var(--line); padding:0 24px; display:flex; gap:4px; flex-wrap:wrap; }
+  nav button { border:none; background:none; padding:14px 16px; font-size:15px; cursor:pointer; border-bottom:3px solid transparent; color:#4b5563; }
+  nav button.active { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; }
+  main { max-width:1000px; margin:20px auto; padding:0 16px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; }
+  .card b { display:block; font-size:24px; color:var(--navy); }
+  .card span { font-size:13px; color:#6b7280; }
+  .bar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .bar input, .bar select { padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:14px; }
+  .bar input { flex:1; min-width:180px; }
+  button.btn { background:var(--blue); color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:14px; }
+  button.btn.gray { background:#e5e7eb; color:#111827; }
+  button.link { background:none; border:none; cursor:pointer; font-size:13px; color:var(--blue); padding:0 4px; }
+  button.link.del { color:var(--red); }
+  .wrap { background:#fff; border:1px solid var(--line); border-radius:8px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { background:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#6b7280; }
+  tr:last-child td { border-bottom:none; }
+  .low { color:var(--red); font-weight:600; }
+  .ok { color:var(--green); font-weight:600; }
+  .empty { padding:20px; text-align:center; color:#6b7280; }
+  .note { font-size:13px; color:#6b7280; margin:10px 2px; }
+  dialog { border:none; border-radius:10px; padding:20px; width:min(420px,92vw); box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  dialog h3 { margin:0 0 12px; }
+  label { display:block; font-size:13px; margin-bottom:10px; color:#374151; }
+  label input, label select { display:block; width:100%; margin-top:4px; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:14px; }
+  .err { color:var(--red); font-size:13px; min-height:18px; margin-bottom:8px; }
+  .actions { display:flex; justify-content:flex-end; gap:8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Student Management System</h1>
+  <p>DBMS Mini Project &middot; MySQL database design shown as a simple web interface</p>
+</header>
+
+<nav id="tabs">
+  <button data-tab="students" class="active">Students</button>
+  <button data-tab="results">Results</button>
+  <button data-tab="attendance">Attendance</button>
+  <button data-tab="fees">Fees</button>
+</nav>
+
+<main>
+  <div class="cards" id="cards"></div>
+  <div id="view"></div>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h3 id="dlgTitle"></h3>
+    <div id="fields"></div>
+    <div class="err" id="err"></div>
+    <div class="actions">
+      <button type="button" class="btn gray" id="cancel">Cancel</button>
+      <button type="submit" class="btn">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// ---------- DATA (same sample data as the SQL script) ----------
+// Each array below is like a table in the database.
+const KEY = "sms_db_v1";
+const seed = {
+  departments: [
+    { id: 1, name: "Computer Science", hod: "Dr. Mehta" },
+    { id: 2, name: "Electronics", hod: "Dr. Iyer" },
+    { id: 3, name: "Mechanical", hod: "Dr. Khan" }
+  ],
+  courses: [
+    { id: 1, name: "Database Management Systems", credits: 4, dept: 1 },
+    { id: 2, name: "Data Structures", credits: 4, dept: 1 },
+    { id: 3, name: "Digital Electronics", credits: 3, dept: 2 },
+    { id: 4, name: "Thermodynamics", credits: 3, dept: 3 }
+  ],
+  students: [
+    { id: 1, first: "Aarav", last: "Joshi", gender: "Male", dob: "2005-03-14", email: "aarav@mail.com", phone: "9900000001", dept: 1 },
+    { id: 2, first: "Diya", last: "Kapoor", gender: "Female", dob: "2005-08-22", email: "diya@mail.com", phone: "9900000002", dept: 1 },
+    { id: 3, first: "Rohan", last: "Desai", gender: "Male", dob: "2004-12-05", email: "rohan@mail.com", phone: "9900000003", dept: 2 },
+    { id: 4, first: "Sneha", last: "Rao", gender: "Female", dob: "2005-01-30", email: "sneha@mail.com", phone: "9900000004", dept: 3 },
+    { id: 5, first: "Karan", last: "Verma", gender: "Male", dob: "2005-05-18", email: "karan@mail.com", phone: "9900000005", dept: 1 }
+  ],
+  marks: [
+    { id: 1, student: 1, course: 1, internal: 35, external: 52 },
+    { id: 2, student: 1, course: 2, internal: 30, external: 45 },
+    { id: 3, student: 2, course: 1, internal: 38, external: 55 },
+    { id: 4, student: 2, course: 2, internal: 28, external: 40 },
+    { id: 5, student: 3, course: 3, internal: 32, external: 48 },
+    { id: 6, student: 4, course: 4, internal: 25, external: 35 },
+    { id: 7, student: 5, course: 1, internal: 20, external: 30 },
+    { id: 8, student: 5, course: 2, internal: 33, external: 50 }
+  ],
+  attendance: [
+    { id: 1, student: 1, course: 1, date: "2026-09-01", status: "Present" },
+    { id: 2, student: 1, course: 1, date: "2026-09-02", status: "Present" },
+    { id: 3, student: 1, course: 1, date: "2026-09-03", status: "Absent" },
+    { id: 4, student: 2, course: 1, date: "2026-09-01", status: "Present" },
+    { id: 5, student: 2, course: 1, date: "2026-09-02", status: "Absent" },
+    { id: 6, student: 2, course: 1, date: "2026-09-03", status: "Absent" },
+    { id: 7, student: 5, course: 1, date: "2026-09-01", status: "Present" },
+    { id: 8, student: 5, course: 1, date: "2026-09-02", status: "Present" },
+    { id: 9, student: 5, course: 1, date: "2026-09-03", status: "Present" }
+  ],
+  fees: [
+    { id: 1, student: 1, amount: 45000, date: "2024-07-05", mode: "UPI" },
+    { id: 2, student: 2, amount: 45000, date: "2024-07-06", mode: "Card" },
+    { id: 3, student: 3, amount: 40000, date: "2024-07-07", mode: "Cash" },
+    { id: 4, student: 5, amount: 20000, date: "2024-07-10", mode: "NetBanking" }
+  ]
+};
+
+let db;
+try { db = JSON.parse(localStorage.getItem(KEY)) || structuredClone(seed); }
+catch (e) { db = structuredClone(seed); }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
+
+// ---------- SMALL HELPERS ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const nextId = list => list.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+const byId = (list, id) => list.find(r => r.id === Number(id));
+const sName = id => { const s = byId(db.students, id); return s ? s.first + " " + s.last : "?"; };
+const cName = id => (byId(db.courses, id) || {}).name || "?";
+const dName = id => (byId(db.departments, id) || {}).name || "?";
+// Same grading rule as the student_results view in SQL
+function grade(t) { return t >= 90 ? "A+" : t >= 80 ? "A" : t >= 70 ? "B" : t >= 60 ? "C" : t >= 40 ? "D" : "F"; }
+const today = () => new Date().toISOString().slice(0, 10);
+
+// ---------- FORM DIALOG ----------
+let onSave = null;
+function openForm(title, fields, values, save_fn) {
+  $("dlgTitle").textContent = title;
+  $("err").textContent = "";
+  $("fields").innerHTML = fields.map(f => {
+    const v = values[f.name] ?? "";
+    let input;
+    if (f.options) {
+      input = `<select name="${f.name}">` + f.options.map(o =>
+        `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? "selected" : ""}>${esc(o.t)}</option>`).join("") + `</select>`;
+    } else {
+      input = `<input name="${f.name}" type="${f.type || "text"}" value="${esc(v)}" ${f.min !== undefined ? `min="${f.min}"` : ""} ${f.max !== undefined ? `max="${f.max}"` : ""} ${f.step ? `step="${f.step}"` : ""}>`;
+    }
+    return `<label>${f.label}${input}</label>`;
+  }).join("");
+  onSave = save_fn;
+  $("dlg").showModal();
+}
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData($("form")).entries());
+  const msg = onSave(data);          // returns an error message, or nothing if OK
+  if (msg) { $("err").textContent = msg; return; }
+  save(); $("dlg").close(); render();
+});
+$("cancel").onclick = () => $("dlg").close();
+
+const opts = (list, label) => list.map(r => ({ v: r.id, t: label(r) }));
+const studentOpts = () => opts(db.students, s => s.first + " " + s.last);
+const courseOpts = () => opts(db.courses, c => c.name);
+
+// ---------- STUDENTS ----------
+let search = "", deptFilter = "";
+function studentFields() {
+  return [
+    { name: "first", label: "First name" }, { name: "last", label: "Last name" },
+    { name: "gender", label: "Gender", options: ["Male", "Female", "Other"].map(g => ({ v: g, t: g })) },
+    { name: "dob", label: "Date of birth", type: "date" },
+    { name: "email", label: "Email", type: "email" }, { name: "phone", label: "Phone" },
+    { name: "dept", label: "Department", options: opts(db.departments, d => d.name) }
+  ];
+}
+function checkStudent(d, ownId) {
+  if (!d.first.trim() || !d.last.trim()) return "First and last name are required.";
+  if (!d.dob) return "Date of birth is required.";
+  if (d.dob > today()) return "DOB cannot be in the future.";               // same rule as the trigger
+  if (d.email && db.students.some(s => s.email === d.email && s.id !== ownId)) return "Email already exists (UNIQUE).";
+  return "";
+}
+function addStudent() {
+  openForm("Add student", studentFields(), { gender: "Male", dept: 1 }, d => {
+    const m = checkStudent(d); if (m) return m;
+    db.students.push({ id: nextId(db.students), ...d, dept: Number(d.dept) });
+  });
+}
+function editStudent(id) {
+  const s = byId(db.students, id);
+  openForm("Edit student", studentFields(), s, d => {
+    const m = checkStudent(d, s.id); if (m) return m;
+    Object.assign(s, d, { dept: Number(d.dept) });
+  });
+}
+function deleteStudent(id) {
+  if (!confirm("Delete this student? Their marks, attendance and fees are deleted too (ON DELETE CASCADE).")) return;
+  db.students = db.students.filter(s => s.id !== id);
+  ["marks", "attendance", "fees"].forEach(t => db[t] = db[t].filter(r => r.student !== id));
+  save(); render();
+}
+function viewStudents() {
+  const q = search.toLowerCase();
+  const rows = db.students.filter(s =>
+    (!deptFilter || s.dept === Number(deptFilter)) &&
+    (s.first + " " + s.last + " " + s.email + " " + s.id).toLowerCase().includes(q));
+  return `
+    <div class="bar">
+      <input id="q" placeholder="Search by name, email or ID" value="${esc(search)}">
+      <select id="dept"><option value="">All departments</option>
+        ${db.departments.map(d => `<option value="${d.id}" ${String(d.id) === deptFilter ? "selected" : ""}>${esc(d.name)}</option>`).join("")}
+      </select>
+      <button class="btn" onclick="addStudent()">+ Add student</button>
+    </div>
+    <div class="wrap"><table>
+      <tr><th>ID</th><th>Name</th><th>Gender</th><th>DOB</th><th>Email</th><th>Phone</th><th>Department</th><th></th></tr>
+      ${rows.map(s => `<tr><td>${s.id}</td><td>${esc(s.first + " " + s.last)}</td><td>${s.gender}</td><td>${s.dob}</td>
+        <td>${esc(s.email)}</td><td>${esc(s.phone)}</td><td>${esc(dName(s.dept))}</td>
+        <td><button class="link" onclick="editStudent(${s.id})">Edit</button><button class="link del" onclick="deleteStudent(${s.id})">Delete</button></td></tr>`).join("")}
+    </table>${rows.length ? "" : '<div class="empty">No students found.</div>'}</div>
+    <p class="note">SQL idea: <code>SELECT * FROM student_details;</code> joins students with departments.</p>`;
+}
+
+// ---------- RESULTS (marks, total and grade) ----------
+function markFields() {
+  return [
+    { name: "student", label: "Student", options: studentOpts() },
+    { name: "course", label: "Course", options: courseOpts() },
+    { name: "internal", label: "Internal marks (0 to 40)", type: "number", min: 0, max: 40, step: "0.01" },
+    { name: "external", label: "External marks (0 to 60)", type: "number", min: 0, max: 60, step: "0.01" }
+  ];
+}
+function checkMark(d, ownId) {
+  const i = Number(d.internal), e = Number(d.external);
+  if (d.internal === "" || d.external === "") return "Enter both internal and external marks.";
+  if (i < 0 || i > 40) return "Internal marks must be between 0 and 40 (CHECK).";
+  if (e < 0 || e > 60) return "External marks must be between 0 and 60 (CHECK).";
+  if (db.marks.some(m => m.student === Number(d.student) && m.course === Number(d.course) && m.id !== ownId))
+    return "Marks for this student and course already exist (UNIQUE).";
+  return "";
+}
+function addMark() {
+  if (!db.students.length) return alert("Add a student first.");
+  openForm("Add marks", markFields(), {}, d => {
+    const m = checkMark(d); if (m) return m;
+    db.marks.push({ id: nextId(db.marks), student: Number(d.student), course: Number(d.course), internal: Number(d.internal), external: Number(d.external) });
+  });
+}
+function editMark(id) {
+  const r = byId(db.marks, id);
+  openForm("Edit marks", markFields(), r, d => {
+    const m = checkMark(d, r.id); if (m) return m;
+    Object.assign(r, { student: Number(d.student), course: Number(d.course), internal: Number(d.internal), external: Number(d.external) });
+  });
+}
+function deleteMark(id) {
+  if (!confirm("Delete this marks record?")) return;
+  db.marks = db.marks.filter(m => m.id !== id); save(); render();
+}
+function viewResults() {
+  return `
+    <div class="bar"><button class="btn" onclick="addMark()">+ Add marks</button></div>
+    <div class="wrap"><table>
+      <tr><th>Student</th><th>Course</th><th>Internal</th><th>External</th><th>Total</th><th>Grade</th><th></th></tr>
+      ${db.marks.map(m => { const t = m.internal + m.external; return `
+        <tr><td>${esc(sName(m.student))}</td><td>${esc(cName(m.course))}</td><td>${m.internal}</td><td>${m.external}</td>
+        <td><b>${t}</b></td><td class="${t < 40 ? "low" : "ok"}">${grade(t)}</td>
+        <td><button class="link" onclick="editMark(${m.id})">Edit</button><button class="link del" onclick="deleteMark(${m.id})">Delete</button></td></tr>`; }).join("")}
+    </table>${db.marks.length ? "" : '<div class="empty">No marks yet.</div>'}</div>
+    <p class="note">Total = internal + external (a generated column in SQL). Grade comes from the <code>student_results</code> view.</p>`;
+}
+
+// ---------- ATTENDANCE ----------
+function addAttendance() {
+  if (!db.students.length) return alert("Add a student first.");
+  openForm("Mark attendance", [
+    { name: "student", label: "Student", options: studentOpts() },
+    { name: "course", label: "Course", options: courseOpts() },
+    { name: "date", label: "Date", type: "date" },
+    { name: "status", label: "Status", options: ["Present", "Absent"].map(s => ({ v: s, t: s })) }
+  ], { date: today(), status: "Present" }, d => {
+    if (!d.date) return "Date is required.";
+    if (db.attendance.some(a => a.student === Number(d.student) && a.course === Number(d.course) && a.date === d.date))
+      return "Attendance for this student, course and date already exists (UNIQUE).";
+    db.attendance.push({ id: nextId(db.attendance), student: Number(d.student), course: Number(d.course), date: d.date, status: d.status });
+  });
+}
+function viewAttendance() {
+  // Group by student + course, like GROUP BY in SQL
+  const groups = {};
+  db.attendance.forEach(a => {
+    const k = a.student + "-" + a.course;
+    (groups[k] = groups[k] || { student: a.student, course: a.course, total: 0, present: 0 });
+    groups[k].total++; if (a.status === "Present") groups[k].present++;
+  });
+  const rows = Object.values(groups);
+  return `
+    <div class="bar"><button class="btn" onclick="addAttendance()">+ Mark attendance</button></div>
+    <div class="wrap"><table>
+      <tr><th>Student</th><th>Course</th><th>Classes</th><th>Present</th><th>Attendance %</th></tr>
+      ${rows.map(g => { const p = Math.round(1000 * g.present / g.total) / 10; return `
+        <tr><td>${esc(sName(g.student))}</td><td>${esc(cName(g.course))}</td><td>${g.total}</td><td>${g.present}</td>
+        <td class="${p < 75 ? "low" : "ok"}">${p}%${p < 75 ? " (low)" : ""}</td></tr>`; }).join("")}
+    </table>${rows.length ? "" : '<div class="empty">No attendance records yet.</div>'}</div>
+    <p class="note">Red means below 75%. SQL idea: <code>GROUP BY student_id, course_id HAVING attendance_pct &lt; 75</code>.</p>`;
+}
+
+// ---------- FEES ----------
+function addFee() {
+  if (!db.students.length) return alert("Add a student first.");
+  openForm("Add fee payment", [
+    { name: "student", label: "Student", options: studentOpts() },
+    { name: "amount", label: "Amount (Rs.)", type: "number", min: 1 },
+    { name: "date", label: "Paid on", type: "date" },
+    { name: "mode", label: "Payment mode", options: ["Cash", "UPI", "Card", "NetBanking"].map(m => ({ v: m, t: m })) }
+  ], { date: today(), mode: "UPI" }, d => {
+    if (!(Number(d.amount) > 0)) return "Enter a valid amount.";
+    if (!d.date) return "Date is required.";
+    db.fees.push({ id: nextId(db.fees), student: Number(d.student), amount: Number(d.amount), date: d.date, mode: d.mode });
+  });
+}
+function deleteFee(id) {
+  if (!confirm("Delete this payment?")) return;
+  db.fees = db.fees.filter(f => f.id !== id); save(); render();
+}
+function viewFees() {
+  const unpaid = db.students.filter(s => !db.fees.some(f => f.student === s.id));
+  return `
+    <div class="bar"><button class="btn" onclick="addFee()">+ Add payment</button></div>
+    <div class="wrap"><table>
+      <tr><th>Student</th><th>Amount</th><th>Paid on</th><th>Mode</th><th></th></tr>
+      ${db.fees.map(f => `<tr><td>${esc(sName(f.student))}</td><td>Rs. ${f.amount.toLocaleString("en-IN")}</td><td>${f.date}</td><td>${f.mode}</td>
+        <td><button class="link del" onclick="deleteFee(${f.id})">Delete</button></td></tr>`).join("")}
+    </table>${db.fees.length ? "" : '<div class="empty">No payments yet.</div>'}</div>
+    <p class="note"><b>Students with no fees paid:</b> ${unpaid.length ? unpaid.map(s => esc(s.first + " " + s.last)).join(", ") : "none"}
+    <br>SQL idea: <code>WHERE student_id NOT IN (SELECT student_id FROM fees)</code>.</p>`;
+}
+
+// ---------- PAGE ----------
+let tab = "students";
+function render() {
+  const paid = db.fees.reduce((s, f) => s + f.amount, 0);
+  $("cards").innerHTML = `
+    <div class="card"><b>${db.students.length}</b><span>Students</span></div>
+    <div class="card"><b>${db.departments.length}</b><span>Departments</span></div>
+    <div class="card"><b>${db.courses.length}</b><span>Courses</span></div>
+    <div class="card"><b>Rs. ${paid.toLocaleString("en-IN")}</b><span>Fees collected</span></div>`;
+  $("view").innerHTML = { students: viewStudents, results: viewResults, attendance: viewAttendance, fees: viewFees }[tab]();
+  if (tab === "students") {
+    $("q").oninput = e => { search = e.target.value; render(); $("q").focus(); $("q").setSelectionRange(search.length, search.length); };
+    $("dept").onchange = e => { deptFilter = e.target.value; render(); };
+  }
+}
+$("tabs").addEventListener("click", e => {
+  if (!e.target.dataset.tab) return;
+  tab = e.target.dataset.tab;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b === e.target));
+  render();
+});
+render();
+</script>
+</body>
+</html>
